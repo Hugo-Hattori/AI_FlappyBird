@@ -1,7 +1,11 @@
 import pygame
 import os
 import random
+import neat
 
+
+ai_jogando = False
+geracao = 0
 
 TELA_LARGURA = 500
 TELA_ALTURA = 800
@@ -115,6 +119,9 @@ class Cano:
         self.pos_topo = self.altura - self.IMG_CANO_TOPO.get_height()
         self.pos_base = self.altura + self.DISTANCIA
 
+    # def mover(self):
+    #     self.x -= self.VELOCIDADE
+
     def mover(self):
         self.x -= self.VELOCIDADE
 
@@ -177,13 +184,32 @@ def desenhar_tela(tela, passaros, canos, chao, pontos):
     texto = FONTE_PONTOS.render(f"Pontuação: {pontos}", 1, (255, 255, 255))
     tela.blit(texto, (TELA_LARGURA - 10 - texto.get_width(), 10))
 
-    chao.desenhar(tela)
+    if ai_jogando:
+        texto = FONTE_PONTOS.render(f"Geração: {geracao}", 1, (255, 255, 255))
+        tela.blit(texto, (10, 10))
 
+    chao.desenhar(tela)
     pygame.display.update()
 
 
-def main():
-    passaros = [Passaro(230, 350)]
+def main(genomas, config): #fitness function ligado ao NEAT
+    global geracao #importando a variável global, pois vamos modificar ela (por isso não a passamos como parâmetro)
+    geracao += 1
+
+    # criar vários pássaros
+    redes = []
+    lista_genomas = []  # genoma é responsável por ditar como as redes neurais irão se modificar
+    passaros = []
+
+    if ai_jogando:
+        for _, genoma in genomas: # o "_" indica que após realizar o unpacking da tupla, eu não quero usar o primeiro item desta tupla para nada
+            rede = neat.nn.FeedForwardNetwork.create(genoma, config)
+            redes.append(rede)
+            genoma.fitness = 0 #pontuação interna do genoma setado para 0
+            lista_genomas.append(genoma)
+            passaros.append(Passaro(230, 350))
+    else:
+        passaros = [Passaro(230, 350)]
     chao = Chao(730)
     canos = [Cano(700)]
     tela = pygame.display.set_mode((TELA_LARGURA, TELA_ALTURA))
@@ -200,14 +226,35 @@ def main():
                 rodando = False
                 pygame.quit() #encerra o jogo
                 quit() #encerra o python em si
-            if evento.type == pygame.KEYDOWN: #se pressionar tecla
-                if evento.key == pygame.K_SPACE:
-                    for passaro in passaros:
-                        passaro.pular()
+            if not ai_jogando:
+                if evento.type == pygame.KEYDOWN: #se pressionar tecla
+                    if evento.key == pygame.K_SPACE:
+                        for passaro in passaros:
+                            passaro.pular()
+
+        indice_cano = 0
+        if len(passaros) > 0:
+            #se a posição x do primeiro pássaro for maior que a posição da img do cano mais a largura do cano
+            if len(canos) > 1 and passaros[0].x > (canos[0].x + canos[0].IMG_CANO_TOPO.get_width()):
+                indice_cano = 1 #altero o cano que deve ser olhado pela IA
+        else:
+            rodando = False
+            break #termina o loop while do jogo
 
         #mover objetos
-        for passaro in passaros:
+        #aqui a IA vai decidir se o pássaro deve pular ou não
+        for i, passaro in enumerate(passaros):
             passaro.mover()
+            if ai_jogando:
+                #dar feedback positivo na fitness da IA (incentivo positivo) -> quanto mais a direita mais pontos
+                lista_genomas[i].fitness += 0.1
+                output = redes[i].activate((passaro.y,
+                                            abs(passaro.y - canos[indice_cano].pos_topo),
+                                            abs(passaro.y - canos[indice_cano].pos_base)))
+                #output retorna entre -1 e 1 -> se for maior que 0.5 -> pássaro pula
+                if output[0] > 0.5:
+                    passaro.pular()
+
         chao.mover()
 
         adicionar_cano = False
@@ -215,7 +262,12 @@ def main():
         for cano in canos:
             for i, passaro in enumerate(passaros):
                 if cano.colidir(passaro):
-                    passaros.pop(i)
+                    passaros.pop(i) #pássaro morreu
+                    if ai_jogando:
+                        lista_genomas[i].fitness -= 1 #penalização -> feedback negativo
+                        #removendo aquela instância de rede
+                        lista_genomas.pop(i)
+                        redes.pop(i)
                 # se cano.passou diz False, mas a posição do pássaro em x já ultrapassou o cano, então altero a variável cano.passou e adiciono um cano
                 if not cano.passou and passaro.x > cano.x:
                     cano.passou = True
@@ -228,22 +280,45 @@ def main():
             pontos += 1
             canos.append(Cano(600))
 
+            # incentivo -> feedback positivo
+            for genoma in lista_genomas:
+                genoma.fitness += 5
+
         for cano in remover_canos:
             canos.remove(cano)
 
         for i, passaro in enumerate(passaros):
             # se a posição da caixa do pássaro + a altura dele mesmo for maior que a posição do chao -> morreu
             # ou se a posição y do pássaro for menor do que zero, ou seja, acima da tela -> morreu
-            if (passaro.y + passaro.imagem.get_height()) > chao.y:
+            if (passaro.y + passaro.imagem.get_height()) > chao.y or passaro.y <0:
                 passaros.pop(i)
+                if ai_jogando:
+                    lista_genomas.pop(i)
+                    redes.pop(i)
 
-        if len(passaros) == 0:
-            # pygame.quit()  # encerra o jogo
-            # quit()
-            main() #restarta o jogo imediatamente
         desenhar_tela(tela, passaros, canos, chao, pontos)
+
+
+def rodar(caminho_config):
+    config = neat.config.Config(neat.DefaultGenome,
+                                neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet,
+                                neat.DefaultStagnation,
+                                caminho_config)
+    populacao = neat.Population(config)
+
+    #adicionando infos sobre a simulação
+    populacao.add_reporter(neat.StdOutReporter(True))
+    populacao.add_reporter(neat.StatisticsReporter())
+
+    if ai_jogando:
+        populacao.run(main, 50) #limitando a simulação até 50 gerações
+    else:
+        main(None, None) #caso seja o usuário jogando
 
 
 #garante que a função main não irá imediatamente rodar se este código for importado por outro código
 if __name__ == '__main__':
-    main()
+    caminho = os.path.dirname(__file__) #pegando o caminho da pasta FlappyBird que contém este arquivo .py
+    caminho_config = os.path.join(caminho, 'config.txt')
+    rodar(caminho_config)

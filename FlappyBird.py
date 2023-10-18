@@ -4,7 +4,7 @@ import random
 import neat
 
 
-ai_jogando = False
+ai_jogando = True
 geracao = 0
 
 TELA_LARGURA = 500
@@ -102,7 +102,7 @@ class Passaro:
 
 class Cano:
     DISTANCIA = 200 #distância entre cano inferior e superior em pixels
-    VELOCIDADE = 5
+    VELOCIDADE = 10
 
     def __init__(self, x):
         self.x = x
@@ -113,17 +113,31 @@ class Cano:
         self.IMG_CANO_BASE = IMAGEM_CANO
         self.passou = False
         self.definir_altura() #roda a função na criação do objeto cano
+        self.sentido = random.randint(0,1)
+
 
     def definir_altura(self):
         self.altura = random.randrange(50, 450)
         self.pos_topo = self.altura - self.IMG_CANO_TOPO.get_height()
         self.pos_base = self.altura + self.DISTANCIA
 
-    # def mover(self):
-    #     self.x -= self.VELOCIDADE
-
     def mover(self):
         self.x -= self.VELOCIDADE
+
+    def mover_vertical(self):
+        if (self.pos_topo + self.IMG_CANO_TOPO.get_height()) <= 450 and self.sentido == 1:
+            self.pos_topo += self.VELOCIDADE
+            self.pos_base += self.VELOCIDADE
+        elif (self.pos_topo + self.IMG_CANO_TOPO.get_height()) >= 70 and self.sentido == 0:
+            self.pos_topo -= self.VELOCIDADE
+            self.pos_base -= self.VELOCIDADE
+
+    def alterar_mov_vertical(self):
+        posicao_cano = self.pos_topo + self.IMG_CANO_TOPO.get_height()
+        if 425 < posicao_cano <= 460:
+            self.sentido = 0
+        if 50 <= posicao_cano < 95:
+            self.sentido = 1
 
     def desenhar(self, tela):
         tela.blit(self.IMG_CANO_TOPO, (self.x, self.pos_topo))
@@ -273,6 +287,8 @@ def main(genomas, config): #fitness function ligado ao NEAT
                     cano.passou = True
                     adicionar_cano = True
             cano.mover()
+            cano.mover_vertical()
+            cano.alterar_mov_vertical()
             if cano.x + cano.IMG_CANO_TOPO.get_width() < 0:
                 remover_canos.append(cano) #usando uma lista auxiliar para remover cano sem que a remoção ocorra enquanto estou percorrendo a lista de canos
 
@@ -312,7 +328,7 @@ def rodar(caminho_config):
     populacao.add_reporter(neat.StatisticsReporter())
 
     if ai_jogando:
-        populacao.run(main, 50) #limitando a simulação até 50 gerações
+        populacao.run(main) #limitando a simulação até 50 gerações
     else:
         main(None, None) #caso seja o usuário jogando
 

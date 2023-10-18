@@ -20,7 +20,7 @@ IMAGENS_PASSARO = [
 ]
 
 pygame.font.init()
-FONTE_PONTOS = pygame.font.SysFont('arial', 50)
+FONTE_PONTOS = pygame.font.SysFont('arial', 40)
 
 
 class Passaro:
@@ -102,7 +102,8 @@ class Passaro:
 
 class Cano:
     DISTANCIA = 200 #distância entre cano inferior e superior em pixels
-    VELOCIDADE = 10
+    VELOCIDADE = 5
+    VEL_VERTICAL = 3
 
     def __init__(self, x):
         self.x = x
@@ -126,11 +127,11 @@ class Cano:
 
     def mover_vertical(self):
         if (self.pos_topo + self.IMG_CANO_TOPO.get_height()) <= 450 and self.sentido == 1:
-            self.pos_topo += self.VELOCIDADE
-            self.pos_base += self.VELOCIDADE
+            self.pos_topo += self.VEL_VERTICAL
+            self.pos_base += self.VEL_VERTICAL
         elif (self.pos_topo + self.IMG_CANO_TOPO.get_height()) >= 70 and self.sentido == 0:
-            self.pos_topo -= self.VELOCIDADE
-            self.pos_base -= self.VELOCIDADE
+            self.pos_topo -= self.VEL_VERTICAL
+            self.pos_base -= self.VEL_VERTICAL
 
     def alterar_mov_vertical(self):
         posicao_cano = self.pos_topo + self.IMG_CANO_TOPO.get_height()
@@ -263,8 +264,9 @@ def main(genomas, config): #fitness function ligado ao NEAT
                 #dar feedback positivo na fitness da IA (incentivo positivo) -> quanto mais a direita mais pontos
                 lista_genomas[i].fitness += 0.1
                 output = redes[i].activate((passaro.y,
-                                            abs(passaro.y - canos[indice_cano].pos_topo),
-                                            abs(passaro.y - canos[indice_cano].pos_base)))
+                                            abs(passaro.y - canos[indice_cano].altura),
+                                            abs(passaro.y - canos[indice_cano].pos_base),
+                                            abs(canos[indice_cano].sentido)))
                 #output retorna entre -1 e 1 -> se for maior que 0.5 -> pássaro pula
                 if output[0] > 0.5:
                     passaro.pular()
@@ -278,7 +280,7 @@ def main(genomas, config): #fitness function ligado ao NEAT
                 if cano.colidir(passaro):
                     passaros.pop(i) #pássaro morreu
                     if ai_jogando:
-                        lista_genomas[i].fitness -= 1 #penalização -> feedback negativo
+                        lista_genomas[i].fitness -= 2 #penalização -> feedback negativo
                         #removendo aquela instância de rede
                         lista_genomas.pop(i)
                         redes.pop(i)
@@ -328,7 +330,7 @@ def rodar(caminho_config):
     populacao.add_reporter(neat.StatisticsReporter())
 
     if ai_jogando:
-        populacao.run(main) #limitando a simulação até 50 gerações
+        populacao.run(main, 50) #limitando a simulação até 50 gerações
     else:
         main(None, None) #caso seja o usuário jogando
 

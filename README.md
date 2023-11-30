@@ -10,7 +10,7 @@
 <p>This a project with the primary objective of recreating the famous mobile game called
 Flappy Bird using the pygame package.</p>
 
-![img.png](img.png)
+![img.png](imgs/img.png)
 
 <hr>
 
@@ -104,7 +104,7 @@ attributes.</p>
 <p>After the game completion the secondary objective of the project is to implement
 an AI to play and learn how to better perform on FlappyBird.</p>
 
-![img_1.png](img_1.png)
+![img_1.png](imgs/img_1.png)
 
 <p>For this project the NEAT Genetic Algorithm was used. The "config.txt" file contains the NEAT
 configuration used for this project.</p>
